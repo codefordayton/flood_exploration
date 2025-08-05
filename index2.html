@@ -572,7 +572,7 @@ const historicalUrl = 'https://waterservices.usgs.gov/nwis/dv/?sites=${HUFFMAN_S
                 codeDisplay.textContent = `// ✅ Real FEMA NFHL Integration - Montgomery County
 // WMS Service (works in production)
 const femaWMS = L.tileLayer.wms('${FEMA_BASE}/WMSServer', {
-    layers: '28,6', // S_Fld_Haz_Ar, S_BFE
+    layers: '28,16', // Flood Hazard Zones, Base Flood Elevations
     format: 'image/png',
     transparent: true,
     crs: L.CRS.EPSG4326,

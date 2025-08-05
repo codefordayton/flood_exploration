@@ -336,7 +336,7 @@ class FEMAApi {
             },
             {
                 url: `${this.baseUrl}/export`,
-                layers: 'show:28,6',
+                layers: 'show:28,16',
                 name: 'FEMA NFHL Export',
                 isExport: true
             }

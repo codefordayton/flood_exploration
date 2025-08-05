@@ -132,6 +132,14 @@
                 </div>
                 
                 <h2>📊 Layer Controls</h2>
+                
+                <div class="card-compact">
+                    <h3>🌊 FEMA Flood Data</h3>
+                    <button class="btn btn-secondary" onclick="queryFEMAData()" id="fema-query-btn">
+                        🔍 Query Real Flood Zones
+                    </button>
+                    <div id="fema-results" style="margin-top: 10px; font-size: 0.9em; color: var(--medium-text);"></div>
+                </div>
                 <div class="controls">
                     <label>
                         <div class="toggle-switch">
@@ -327,18 +335,92 @@
         }
         
         function addRealFloodplains() {
-            // FEMA National Flood Hazard Layer WMS Service
-            const femaWMS = L.tileLayer.wms('https://hazards.fema.gov/arcgis/services/public/NFHL/MapServer/WMSServer', {
-                layers: '28,6', // 28=S_Fld_Haz_Ar (Special Flood Hazard Areas), 6=S_BFE (Base Flood Elevations)
+            // FEMA National Flood Hazard Layer WMS Service (Fixed endpoint and layers)
+            const femaWMS = L.tileLayer.wms('https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/WMSServer', {
+                layers: '28,16', // 28=Flood Hazard Zones, 16=Base Flood Elevations
                 format: 'image/png',
                 transparent: true,
-                version: '1.3.0',
+                version: '1.1.1', // Use older version for better compatibility
                 crs: L.CRS.EPSG4326,
                 opacity: 0.6,
                 attribution: 'FEMA National Flood Hazard Layer'
             });
             
+            // Add error handling for FEMA WMS issues
+            let femaErrorCount = 0;
+            femaWMS.on('tileerror', function(e) {
+                femaErrorCount++;
+                console.warn('FEMA WMS tile failed to load:', e);
+                
+                // If multiple tiles fail, show notification and use alternative
+                if (femaErrorCount > 2) {
+                    console.log('FEMA WMS having issues, using alternative flood zone data');
+                    showFEMANotification();
+                }
+            });
+            
+            femaWMS.on('tileload', function(e) {
+                console.log('FEMA WMS tile loaded successfully');
+            });
+            
             layerGroups.floodplain.addLayer(femaWMS);
+        }
+        
+        function showFEMANotification() {
+            // Add a notification that FEMA layers may not be visible
+            const femaNotice = L.control({position: 'bottomright'});
+            femaNotice.onAdd = function() {
+                const div = L.DomUtil.create('div', 'fema-notice');
+                div.innerHTML = `
+                    <div style="background: rgba(255,193,7,0.9); color: #856404; padding: 12px; border-radius: 6px; font-size: 13px; max-width: 280px; border-left: 4px solid #ffc107;">
+                        <strong>⚠️ FEMA Notice:</strong><br>
+                        Flood zone layers may not be visible due to service limitations.<br>
+                        <strong>18,596 properties</strong> are at verified risk in this area.<br>
+                        <small>Data: Guardian article + First Street Foundation</small>
+                    </div>
+                `;
+                return div;
+            };
+            femaNotice.addTo(map);
+        }
+        
+        // Query FEMA flood zone data via REST API
+        async function queryFEMAData() {
+            const btn = document.getElementById('fema-query-btn');
+            const results = document.getElementById('fema-results');
+            
+            btn.textContent = '⏳ Querying FEMA...';
+            btn.disabled = true;
+            
+            try {
+                const femaApi = new window.FloodDashboard.FEMAApi();
+                const data = await femaApi.getFloodZones();
+                
+                results.innerHTML = `
+                    <div style="background: var(--surface-light); padding: 10px; border-radius: 6px; margin-top: 10px;">
+                        <strong>✅ FEMA Data Retrieved:</strong><br>
+                        <strong>Flood Zones:</strong> ${data.zones.join(', ')}<br>
+                        <strong>Features:</strong> ${data.totalFeatures} flood zones<br>
+                        <strong>Map Areas:</strong> ${data.dfirmIds ? data.dfirmIds.join(', ') : 'Montgomery County'}<br>
+                        <strong>At-Risk Properties:</strong> ${data.propertiesAtRisk.toLocaleString()}<br>
+                        ${data.isSimulated ? '<em>Using verified Guardian data (API fallback)</em>' : '<em>Live FEMA data</em>'}
+                    </div>
+                `;
+                
+                btn.textContent = '✅ Data Retrieved';
+                
+            } catch (error) {
+                console.error('FEMA query error:', error);
+                results.innerHTML = `
+                    <div style="background: rgba(231,76,60,0.1); padding: 10px; border-radius: 6px; margin-top: 10px; border-left: 3px solid var(--danger-red);">
+                        <strong>⚠️ API Error:</strong><br>
+                        Using verified data: <strong>18,596 properties</strong> at risk in Dayton area<br>
+                        <em>Source: Guardian article + First Street Foundation</em>
+                    </div>
+                `;
+                btn.textContent = '🔍 Try Again';
+                btn.disabled = false;
+            }
         }
         
         function addStorageAreas() {
