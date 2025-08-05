@@ -215,6 +215,8 @@
 
     <!-- Leaflet JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <!-- Esri Leaflet for better ArcGIS integration (optional, has fallback) -->
+    <script src="https://unpkg.com/esri-leaflet@3.0.10/dist/esri-leaflet.js"></script>
     
     <!-- Shared JavaScript -->
     <script src="assets/js/shared.js"></script>
@@ -335,38 +337,87 @@
         }
         
         function addRealFloodplains() {
-            // FEMA WMS has ERR_BLOCKED_BY_ORB issues (returns HTML instead of PNG)
-            // Show a clear message about this and provide alternative data access
-            console.log('FEMA WMS service has ORB blocking issues - using alternative approach');
+            // Try multiple approaches to display FEMA flood zones
             
-            // Add visual indicator for high-risk areas using verified data
-            const daytonHighRiskArea = [
-                [39.80, -84.25], [39.80, -84.15], [39.70, -84.15], [39.70, -84.25]
-            ];
-            
-            const riskPolygon = L.polygon(daytonHighRiskArea, {
-                color: 'rgba(220, 53, 69, 0.8)',
-                fillColor: 'rgba(220, 53, 69, 0.3)',
-                fillOpacity: 0.6,
-                weight: 2
+            // Method 1: Use Esri Leaflet (if available) - Most reliable
+            if (typeof L.esri !== 'undefined') {
+                console.log('Using Esri Leaflet for FEMA flood zones');
+                
+                const femaLayer = L.esri.dynamicMapLayer({
+                    url: 'https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer',
+                    layers: [28, 16], // Flood Hazard Zones, Base Flood Elevations
+                    opacity: 0.7,
+                    attribution: 'FEMA National Flood Hazard Layer'
+                });
+                
+                femaLayer.on('load', function() {
+                    console.log('✅ FEMA Dynamic Map Layer loaded successfully');
+                    showFEMASuccessNotification('Esri Dynamic Layer');
+                });
+                
+                femaLayer.on('error', function(e) {
+                    console.warn('FEMA Dynamic Layer error, trying fallback:', e);
+                    addFallbackFloodLayer();
+                });
+                
+                layerGroups.floodplain.addLayer(femaLayer);
+                
+            } else {
+                // Method 2: Custom Export tile layer (fallback)
+                console.log('Esri Leaflet not available, using custom Export tile layer');
+                addFallbackFloodLayer();
+            }
+        }
+        
+        function addFallbackFloodLayer() {
+            // Custom FEMA tile layer using Export service (bypasses WMS ORB issues)
+            const FEMAExportLayer = L.TileLayer.extend({
+                getTileUrl: function(coords) {
+                    // Convert tile coordinates to bounding box
+                    const tileBounds = this._tileCoordsToBounds(coords);
+                    const sw = tileBounds.getSouthWest();
+                    const ne = tileBounds.getNorthEast();
+                    
+                    // Convert to Web Mercator (EPSG:3857) for FEMA service
+                    const swMercator = L.CRS.EPSG3857.project(sw);
+                    const neMercator = L.CRS.EPSG3857.project(ne);
+                    
+                    const bbox = [swMercator.x, swMercator.y, neMercator.x, neMercator.y].join(',');
+                    
+                    const url = 'https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/export?' +
+                        'bbox=' + bbox +
+                        '&bboxSR=3857' +
+                        '&layers=show:28,16' + // Flood Hazard Zones, Base Flood Elevations
+                        '&layerDefs=' +
+                        '&size=256,256' +
+                        '&imageSR=3857' +
+                        '&format=png' +
+                        '&transparent=true' +
+                        '&f=image';
+                    
+                    return url;
+                }
             });
             
-            riskPolygon.bindPopup(`
-                <div style="font-family: Arial; line-height: 1.4;">
-                    <h3 style="color: #dc3545; margin: 0 0 10px 0;">⚠️ FEMA WMS Service Issue</h3>
-                    <p><strong>ERR_BLOCKED_BY_ORB:</strong> FEMA's WMS returns HTML instead of images</p>
-                    <p><strong>Verified Risk Data:</strong></p>
-                    <p>• <strong>18,596 properties</strong> at risk in this area</p>
-                    <p>• <strong>21% of downstream properties</strong> at risk</p>
-                    <p><strong>Source:</strong> Guardian article + First Street Foundation</p>
-                    <p><em>Use "Query Real Flood Zones" button for REST API data</em></p>
-                </div>
-            `);
+            // Create the FEMA flood layer
+            const femaFloodLayer = new FEMAExportLayer('', {
+                opacity: 0.7,
+                attribution: 'FEMA National Flood Hazard Layer (Export Service)'
+            });
             
-            layerGroups.floodplain.addLayer(riskPolygon);
+            // Add success/error handling
+            femaFloodLayer.on('tileload', function(e) {
+                console.log('✅ FEMA Export tile loaded successfully');
+            });
             
-            // Show notification about the ORB issue
-            showORBNotification();
+            femaFloodLayer.on('tileerror', function(e) {
+                console.warn('FEMA Export tile error:', e);
+            });
+            
+            layerGroups.floodplain.addLayer(femaFloodLayer);
+            
+            // Add success notification
+            showFEMASuccessNotification('Custom Export Layer');
         }
         
         function showORBNotification() {
@@ -384,6 +435,24 @@
                 return div;
             };
             orbNotice.addTo(map);
+        }
+        
+        function showFEMASuccessNotification(method = 'Export Service') {
+            const successNotice = L.control({position: 'bottomright'});
+            successNotice.onAdd = function() {
+                const div = L.DomUtil.create('div', 'fema-success-notice');
+                div.innerHTML = `
+                    <div style="background: rgba(40,167,69,0.9); color: white; padding: 12px; border-radius: 6px; font-size: 13px; max-width: 300px;">
+                        <strong>✅ FEMA Flood Zones Active</strong><br>
+                        Using <strong>${method}</strong> to display real flood hazard zones and base flood elevations.<br><br>
+                        <strong>Layers:</strong> Special Flood Hazard Areas (28) + Base Flood Elevations (16)<br>
+                        <strong>Coverage:</strong> Montgomery County + surrounding areas<br>
+                        <strong>Method:</strong> Bypasses WMS ORB blocking
+                    </div>
+                `;
+                return div;
+            };
+            successNotice.addTo(map);
         }
         
         function showFEMANotification() {

@@ -325,42 +325,53 @@ class FEMAApi {
         };
     }
     
-    // Create WMS layer for Leaflet with fallback options
+    // Create WMS layer for Leaflet - using Export service to avoid ORB issues
     createWMSLayer() {
-        // Try multiple FEMA endpoints for better reliability
-        const endpoints = [
-            {
-                url: VERIFIED_DATA.FEMA_WMS,
-                layers: '28,16', // Flood Hazard Zones, Base Flood Elevations
-                name: 'FEMA NFHL WMS'
-            },
-            {
-                url: `${this.baseUrl}/export`,
-                layers: 'show:28,16',
-                name: 'FEMA NFHL Export',
-                isExport: true
+        // FEMA WMS has ERR_BLOCKED_BY_ORB issues, use Export service instead
+        const FEMAExportLayer = L.TileLayer.extend({
+            getTileUrl: function(coords) {
+                // Convert tile coordinates to bounding box
+                const tileBounds = this._tileCoordsToBounds(coords);
+                const sw = tileBounds.getSouthWest();
+                const ne = tileBounds.getNorthEast();
+                
+                // Convert to Web Mercator (EPSG:3857) for FEMA service
+                const swMercator = L.CRS.EPSG3857.project(sw);
+                const neMercator = L.CRS.EPSG3857.project(ne);
+                
+                const bbox = [swMercator.x, swMercator.y, neMercator.x, neMercator.y].join(',');
+                
+                const url = `${VERIFIED_DATA.FEMA_BASE}/export?` +
+                    'bbox=' + bbox +
+                    '&bboxSR=3857' +
+                    '&layers=show:28,16' + // Flood Hazard Zones, Base Flood Elevations
+                    '&layerDefs=' +
+                    '&size=256,256' +
+                    '&imageSR=3857' +
+                    '&format=png' +
+                    '&transparent=true' +
+                    '&f=image';
+                
+                return url;
             }
-        ];
+        });
         
-        // Primary WMS attempt - note: FEMA WMS may have rendering issues
-        const wmsLayer = L.tileLayer.wms(endpoints[0].url, {
-            layers: endpoints[0].layers,
-            format: 'image/png',
-            transparent: true,
-            version: '1.1.1', // Use older version for better compatibility  
-            crs: L.CRS.EPSG4326, // Use geographic coordinates to match service
+        // Create the working FEMA layer
+        const exportLayer = new FEMAExportLayer('', {
             opacity: 0.6,
-            attribution: 'FEMA National Flood Hazard Layer',
-            // Add error handling for problematic tiles
-            errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+            attribution: 'FEMA National Flood Hazard Layer (Export Service)'
         });
         
-        // Add event listener to detect loading errors
-        wmsLayer.on('tileerror', function(error) {
-            console.warn('FEMA WMS tile error:', error);
+        // Add event listeners
+        exportLayer.on('tileload', function(e) {
+            console.log('✅ FEMA Export tile loaded successfully');
         });
         
-        return wmsLayer;
+        exportLayer.on('tileerror', function(error) {
+            console.warn('FEMA Export tile error:', error);
+        });
+        
+        return exportLayer;
     }
     
     // Alternative: Create dynamic map service layer
