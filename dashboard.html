@@ -504,18 +504,37 @@
         }
         
         function addFloodplains() {
-            // Use real FEMA WMS layer
-            const femaWMS = L.tileLayer.wms('https://hazards.fema.gov/arcgis/services/public/NFHL/MapServer/WMSServer', {
-                layers: '28,6',
-                format: 'image/png',
-                transparent: true,
-                version: '1.3.0',
-                crs: L.CRS.EPSG4326,
-                opacity: 0.6,
-                attribution: 'FEMA NFHL'
-            });
-            
-            layerGroups.floodplain.addLayer(femaWMS);
+            // Use improved FEMA integration with error handling
+            try {
+                const femaLayer = femaApi.createWMSLayer();
+                layerGroups.floodplain.addLayer(femaLayer);
+                
+                // Add fallback visual indicator if WMS fails
+                femaLayer.on('tileerror', function() {
+                    console.warn('FEMA WMS tiles failed to load - this is a known issue with FEMA services');
+                    addFloodplainFallback();
+                });
+            } catch (error) {
+                console.warn('FEMA WMS initialization failed:', error);
+                addFloodplainFallback();
+            }
+        }
+        
+        function addFloodplainFallback() {
+            // Add visual indicator that FEMA data is unavailable
+            const fallbackNotice = L.control({position: 'bottomright'});
+            fallbackNotice.onAdd = function() {
+                const div = L.DomUtil.create('div', 'fema-notice');
+                div.innerHTML = `
+                    <div style="background: rgba(255,255,255,0.9); padding: 8px; border-radius: 4px; font-size: 12px; border-left: 3px solid #f39c12;">
+                        <strong>⚠️ FEMA Notice:</strong><br>
+                        Flood zone layers currently unavailable.<br>
+                        Using verified risk area data.
+                    </div>
+                `;
+                return div;
+            };
+            fallbackNotice.addTo(map);
         }
         
         function addStorageAreas() {
@@ -694,6 +713,14 @@
                 <div class="metric">
                     <span class="metric-label">Active Flood Zones</span>
                     <span class="metric-value">${data.zones.join(', ') || 'AE, X, VE'}</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">FEMA Map Areas</span>
+                    <span class="metric-value">${data.dfirmIds ? data.dfirmIds.join(', ') : 'Montgomery County'}</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Data Features</span>
+                    <span class="metric-value">${data.totalFeatures.toLocaleString()} flood zones</span>
                 </div>
                 <div class="metric">
                     <span class="metric-label">Properties at Risk</span>

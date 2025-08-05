@@ -419,7 +419,7 @@ try {
                 codeDisplay.textContent = `// ✅ Real FEMA NFHL Integration - Montgomery County
 // WMS Service (works in production)
 const femaWMS = L.tileLayer.wms('https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/WMSServer', {
-    layers: '28,6', // S_Fld_Haz_Ar (Special Flood Hazard Areas), S_BFE (Base Flood Elevations)
+    layers: '28,16', // Flood Hazard Zones, Base Flood Elevations
     format: 'image/png',
     transparent: true,
     crs: L.CRS.EPSG4326,
@@ -427,7 +427,7 @@ const femaWMS = L.tileLayer.wms('https://hazards.fema.gov/arcgis/rest/services/p
 });
 
 // REST API for detailed flood zone queries
-const bounds = '39.6,-84.4,40.3,-84.0'; // Miami Valley bounds
+const bounds = '-84.4,39.6,-84.0,40.3'; // Miami Valley bounds (xmin,ymin,xmax,ymax)
 const queryUrl = 'https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query?' +
     'geometry=' + bounds + '&geometryType=esriGeometryEnvelope' +
     '&spatialRel=esriSpatialRelIntersects&outFields=FLD_ZONE,ZONE_SUBTY' +
@@ -488,8 +488,12 @@ const queryUrl = 'https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapS
                     <span class="metric-value">${data.zones.join(', ') || 'AE, X, VE (typical)'}</span>
                 </div>
                 <div class="metric">
-                    <span class="metric-label">Coverage Area</span>
-                    <span class="metric-value">Montgomery County, OH</span>
+                    <span class="metric-label">FEMA Map Areas</span>
+                    <span class="metric-value">${data.dfirmIds ? data.dfirmIds.join(', ') : 'Montgomery County, OH'}</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Data Features</span>
+                    <span class="metric-value">${data.totalFeatures.toLocaleString()} flood zones found</span>
                 </div>
                 <div class="metric">
                     <span class="metric-label">High-Risk Properties</span>
