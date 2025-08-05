@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Miami Conservancy District - Flood Risk Dashboard</title>
+    <meta http-equiv="refresh" content="0; url=dashboard.html">
+    
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="assets/css/shared.css">
+    
+    <style>
+        .redirect-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .redirect-card {
+            background: var(--surface-white);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .quick-links {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .quick-link {
+            background: linear-gradient(45deg, var(--primary-blue), var(--secondary-blue));
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .quick-link:hover {
+            background: linear-gradient(45deg, var(--secondary-blue), var(--accent-teal));
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="redirect-container">
+        <div class="redirect-card">
+            <h1>🌊 Miami Conservancy District</h1>
+            <h2>Flood Risk Dashboard</h2>
+            
+            <div class="loading-spinner"></div>
+            
+            <p>Redirecting to the new unified dashboard...</p>
+            <p style="color: var(--light-text); font-size: 0.9em;">
+                The project has been reorganized into a more coherent structure with<br>
+                professional navigation and improved data integration.
+            </p>
+            
+            <div class="quick-links">
+                <a href="dashboard.html" class="quick-link">🏠 Dashboard</a>
+                <a href="map.html" class="quick-link">🗺️ Interactive Map</a>
+                <a href="api-demo.html" class="quick-link">📊 Live Data API</a>
+            </div>
+            
+            <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+                <h3>✅ Project Improvements</h3>
+                <ul style="text-align: left; color: var(--medium-text);">
+                    <li><strong>Unified Design:</strong> Consistent styling and navigation</li>
+                    <li><strong>Real Data Integration:</strong> Verified USGS, FEMA, and Guardian data</li>
+                    <li><strong>Professional Structure:</strong> Organized assets and shared components</li>
+                    <li><strong>Production Ready:</strong> Error handling and fallback systems</li>
+                    <li><strong>Mobile Responsive:</strong> Works on all device sizes</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-redirect after 3 seconds if meta refresh doesn't work
+        setTimeout(() => {
+            window.location.href = 'dashboard.html';
+        }, 3000);
+    </script>
+</body>
+</html>

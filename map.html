@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Flood Risk Map - Miami Conservancy District</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="assets/css/shared.css">
+    
+    <style>
+        .map-layout {
+            display: flex;
+            height: calc(100vh - 140px);
+            gap: 20px;
+        }
+        
+        .map-sidebar {
+            width: 350px;
+            background: var(--surface-white);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+        }
+        
+        .map-main {
+            flex: 1;
+            background: var(--surface-white);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #map {
+            height: 100%;
+            border-radius: 10px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .dam-selector {
+            margin: 15px 0;
+        }
+        
+        .dam-button {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            background: linear-gradient(45deg, var(--primary-blue), var(--secondary-blue));
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .dam-button:hover {
+            background: linear-gradient(45deg, var(--secondary-blue), var(--accent-teal));
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+        
+        .dam-button.critical {
+            background: linear-gradient(45deg, var(--danger-red), #c0392b);
+        }
+        
+        .dam-button.warning {
+            background: linear-gradient(45deg, var(--warning-orange), #d68910);
+        }
+        
+        .controls {
+            margin: 20px 0;
+        }
+        
+        .data-source {
+            font-size: 12px;
+            color: var(--light-text);
+            margin-top: 20px;
+            padding: 10px;
+            background: #ecf0f1;
+            border-radius: 6px;
+        }
+        
+        @media (max-width: 1024px) {
+            .map-layout {
+                flex-direction: column;
+                height: auto;
+            }
+            .map-sidebar {
+                width: 100%;
+                order: 2;
+            }
+            .map-main {
+                height: 60vh;
+                order: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="map-layout">
+            <div class="map-sidebar">
+                <h1>🌊 Interactive Flood Map</h1>
+                
+                <div class="info-card critical">
+                    <h3>🚨 Critical Risk Alert</h3>
+                    <p><strong>Properties at Risk:</strong> 18,596 in Dayton</p>
+                    <p><strong>Risk Level:</strong> 21% of downstream properties</p>
+                    <p><strong>Timeframe:</strong> Next 30 years</p>
+                    <p><strong>Funding Gap:</strong> $140M needed</p>
+                </div>
+                
+                <div class="info-card warning">
+                    <h3>April 2025 Event</h3>
+                    <p><strong>Ranking:</strong> 12th largest in MCD history</p>
+                    <p><strong>Infrastructure Strain:</strong> 228% increase over 80 years</p>
+                </div>
+                
+                <h2>🏗️ Dam Controls</h2>
+                <div class="dam-selector" id="dam-controls">
+                    <!-- Dam buttons will be populated by JavaScript -->
+                </div>
+                
+                <h2>📊 Layer Controls</h2>
+                <div class="controls">
+                    <label>
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="riskAreasToggle" checked onchange="toggleRiskAreas()">
+                            <span class="slider"></span>
+                        </div>
+                        High-Risk Properties
+                    </label><br>
+                    
+                    <label>
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="floodplainToggle" checked onchange="toggleFloodplains()">
+                            <span class="slider"></span>
+                        </div>
+                        FEMA Floodplains
+                    </label><br>
+                    
+                    <label>
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="storageToggle" checked onchange="toggleStorageAreas()">
+                            <span class="slider"></span>
+                        </div>
+                        Storage Basins
+                    </label><br>
+                    
+                    <label>
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="elevationToggle" onchange="toggleElevation()">
+                            <span class="slider"></span>
+                        </div>
+                        Elevation Data
+                    </label>
+                </div>
+                
+                <div class="legend">
+                    <h3>🗺️ Legend</h3>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: rgba(220, 53, 69, 0.4);"></div>
+                        <span>High-Risk Properties (21%+)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: rgba(0, 123, 255, 0.3);"></div>
+                        <span>100-year Floodplain</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: rgba(255, 193, 7, 0.4);"></div>
+                        <span>500-year Floodplain</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: rgba(40, 167, 69, 0.3);"></div>
+                        <span>Storage Basin</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: rgba(220, 53, 69, 0.8);"></div>
+                        <span>Dam Structure</span>
+                    </div>
+                </div>
+                
+                <div class="data-source">
+                    <strong>Data Sources:</strong><br>
+                    • FEMA National Flood Hazard Layer<br>
+                    • Miami Conservancy District GeoPort<br>
+                    • First Street Foundation Climate Data<br>
+                    • USGS Water Data Services
+                </div>
+            </div>
+            
+            <div class="map-main">
+                <div id="map"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    
+    <!-- Shared JavaScript -->
+    <script src="assets/js/shared.js"></script>
+    
+    <script>
+        // Map-specific JavaScript
+        let map;
+        let layerGroups = {};
+        
+        // Initialize map page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeMap();
+            populateDamControls();
+        });
+        
+        function initializeMap() {
+            // Initialize map centered on Miami Valley
+            map = L.map('map').setView([39.7589, -84.1916], 10);
+            
+            // Add base map tiles
+            const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            });
+            
+            const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri, Maxar, Earthstar Geographics'
+            });
+            
+            // Add default layer
+            osmLayer.addTo(map);
+            
+            // Base layer control
+            const baseLayers = {
+                "Street Map": osmLayer,
+                "Satellite": satelliteLayer
+            };
+            L.control.layers(baseLayers).addTo(map);
+            
+            // Layer groups for organization
+            layerGroups = {
+                dams: L.layerGroup(),
+                floodplain: L.layerGroup(),
+                storage: L.layerGroup(),
+                elevation: L.layerGroup(),
+                riskAreas: L.layerGroup()
+            };
+            
+            // Add layers to map
+            Object.values(layerGroups).forEach(layer => layer.addTo(map));
+            
+            // Initialize map content
+            addDamMarkers();
+            addRiskAreas();
+            addRealFloodplains();
+            addStorageAreas();
+            
+            // Add scale control
+            L.control.scale().addTo(map);
+            
+            // Add custom attribution
+            map.attributionControl.addAttribution('Flood data: FEMA NFHL | Dam data: Miami Conservancy District');
+        }
+        
+        function addDamMarkers() {
+            Object.entries(window.FloodDashboard.DAMS).forEach(([key, dam]) => {
+                const color = window.FloodDashboard.Utils.getStatusColor(dam.status);
+                
+                const marker = L.circleMarker(dam.coords, {
+                    radius: 12,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 3,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                });
+                
+                const popupContent = `
+                    <div style="font-family: Arial; line-height: 1.4;">
+                        <h3 style="margin: 0 0 10px 0; color: #2c3e50;">${dam.name}</h3>
+                        <p><strong>Status:</strong> <span style="color: ${color}; font-weight: bold;">${dam.status.toUpperCase()}</span></p>
+                        ${dam.specs ? `<p><strong>Height:</strong> ${dam.specs.height} ft</p>` : ''}
+                        ${dam.specs ? `<p><strong>Length:</strong> ${dam.specs.length.toLocaleString()} ft</p>` : ''}
+                        ${dam.specs ? `<p><strong>Volume:</strong> ${dam.specs.volume.toLocaleString()} cubic yards</p>` : ''}
+                        ${dam.storageCapacity ? `<p><strong>Storage:</strong> ${dam.storageCapacity}</p>` : ''}
+                        ${dam.criticalIssues ? `<p style="color: #e74c3c;"><strong>Critical Issues:</strong> ${dam.criticalIssues}</p>` : ''}
+                    </div>
+                `;
+                
+                marker.bindPopup(popupContent);
+                layerGroups.dams.addLayer(marker);
+            });
+        }
+        
+        function addRiskAreas() {
+            // High-risk area around Dayton based on verified data
+            const daytonRiskArea = [
+                [39.80, -84.25], [39.80, -84.15], [39.70, -84.15], [39.70, -84.25]
+            ];
+            
+            const riskPolygon = L.polygon(daytonRiskArea, {
+                color: 'rgba(220, 53, 69, 0.8)',
+                fillColor: 'rgba(220, 53, 69, 0.4)',
+                fillOpacity: 0.6,
+                weight: 2
+            });
+            
+            riskPolygon.bindPopup(`
+                <div style="font-family: Arial; line-height: 1.4;">
+                    <h3 style="color: #dc3545;">High-Risk Zone</h3>
+                    <p><strong>Properties at Risk:</strong> ${window.FloodDashboard.VERIFIED_DATA.PROPERTIES_AT_RISK.toLocaleString()}</p>
+                    <p><strong>Risk Level:</strong> ${window.FloodDashboard.VERIFIED_DATA.RISK_PERCENTAGE}% of all downstream properties</p>
+                    <p><strong>Timeframe:</strong> Next 30 years</p>
+                    <p><strong>Source:</strong> First Street Foundation climate risk data</p>
+                </div>
+            `);
+            
+            layerGroups.riskAreas.addLayer(riskPolygon);
+        }
+        
+        function addRealFloodplains() {
+            // FEMA National Flood Hazard Layer WMS Service
+            const femaWMS = L.tileLayer.wms('https://hazards.fema.gov/arcgis/services/public/NFHL/MapServer/WMSServer', {
+                layers: '28,6', // 28=S_Fld_Haz_Ar (Special Flood Hazard Areas), 6=S_BFE (Base Flood Elevations)
+                format: 'image/png',
+                transparent: true,
+                version: '1.3.0',
+                crs: L.CRS.EPSG4326,
+                opacity: 0.6,
+                attribution: 'FEMA National Flood Hazard Layer'
+            });
+            
+            layerGroups.floodplain.addLayer(femaWMS);
+        }
+        
+        function addStorageAreas() {
+            const storageAreas = [
+                {
+                    coords: [
+                        [39.78, -84.11], [39.79, -84.09], [39.77, -84.08], [39.76, -84.10]
+                    ],
+                    name: "Huffman Storage Basin"
+                },
+                {
+                    coords: [
+                        [39.63, -84.37], [39.64, -84.36], [39.62, -84.35], [39.61, -84.36]
+                    ],
+                    name: "Germantown Storage Basin"
+                }
+            ];
+            
+            storageAreas.forEach(area => {
+                const polygon = L.polygon(area.coords, {
+                    color: 'rgba(40, 167, 69, 0.8)',
+                    fillColor: 'rgba(40, 167, 69, 0.3)',
+                    fillOpacity: 0.6,
+                    weight: 2
+                });
+                
+                polygon.bindPopup(`<strong>${area.name}</strong><br>Flood storage capacity area`);
+                layerGroups.storage.addLayer(polygon);
+            });
+        }
+        
+        function populateDamControls() {
+            const damControls = document.getElementById('dam-controls');
+            
+            Object.entries(window.FloodDashboard.DAMS).forEach(([key, dam]) => {
+                const button = document.createElement('button');
+                button.className = `dam-button ${dam.status === 'high' ? 'critical' : dam.status === 'elevated' ? 'warning' : ''}`;
+                button.onclick = () => focusDam(key);
+                
+                const statusText = dam.status === 'high' ? 'CRITICAL' : 
+                                 dam.status === 'elevated' ? 'ELEVATED' : 'NORMAL';
+                
+                button.innerHTML = `
+                    <span class="status-indicator status-${dam.status}"></span>${dam.name} (${statusText})
+                `;
+                
+                damControls.appendChild(button);
+            });
+        }
+        
+        // Control functions
+        function focusDam(damKey) {
+            const dam = window.FloodDashboard.DAMS[damKey];
+            if (dam) {
+                map.setView(dam.coords, 13);
+                
+                // Highlight the dam temporarily
+                const highlight = L.circleMarker(dam.coords, {
+                    radius: 20,
+                    fillColor: 'yellow',
+                    color: '#fff',
+                    weight: 3,
+                    opacity: 1,
+                    fillOpacity: 0.3
+                }).addTo(map);
+                
+                setTimeout(() => {
+                    map.removeLayer(highlight);
+                }, 2000);
+            }
+        }
+        
+        function toggleRiskAreas() {
+            const toggle = document.getElementById('riskAreasToggle');
+            if (toggle.checked) {
+                layerGroups.riskAreas.addTo(map);
+            } else {
+                map.removeLayer(layerGroups.riskAreas);
+            }
+        }
+        
+        function toggleFloodplains() {
+            const toggle = document.getElementById('floodplainToggle');
+            if (toggle.checked) {
+                layerGroups.floodplain.addTo(map);
+            } else {
+                map.removeLayer(layerGroups.floodplain);
+            }
+        }
+        
+        function toggleStorageAreas() {
+            const toggle = document.getElementById('storageToggle');
+            if (toggle.checked) {
+                layerGroups.storage.addTo(map);
+            } else {
+                map.removeLayer(layerGroups.storage);
+            }
+        }
+        
+        function toggleElevation() {
+            const toggle = document.getElementById('elevationToggle');
+            if (toggle.checked) {
+                // Add USGS elevation WMS layer
+                const elevationWMS = L.tileLayer.wms('https://elevation.nationalmap.gov/arcgis/services/3DEPElevation/ImageServer/WMSServer', {
+                    layers: '3DEPElevation:None',
+                    format: 'image/png',
+                    transparent: true,
+                    opacity: 0.6
+                });
+                elevationWMS.addTo(map);
+                layerGroups.elevation.addLayer(elevationWMS);
+            } else {
+                map.removeLayer(layerGroups.elevation);
+                layerGroups.elevation.clearLayers();
+            }
+        }
+    </script>
+</body>
+</html>

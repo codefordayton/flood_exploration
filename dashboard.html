@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Miami Conservancy District - Flood Risk Dashboard</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="assets/css/shared.css">
+    
+    <style>
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+            min-height: calc(100vh - 140px);
+        }
+        
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: var(--surface-white);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: 700;
+            margin: 0;
+        }
+        
+        .stat-number.danger { color: var(--danger-red); }
+        .stat-number.warning { color: var(--warning-orange); }
+        .stat-number.success { color: var(--success-green); }
+        
+        .stat-label {
+            color: var(--light-text);
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        
+        .map-container {
+            flex: 1;
+            background: var(--surface-white);
+            border-radius: 15px;
+            padding: 20px;
+            min-height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #map {
+            flex: 1;
+            border-radius: 10px;
+            min-height: 400px;
+        }
+        
+        .dam-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .dam-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            margin: 8px 0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-left: 4px solid var(--primary-blue);
+        }
+        
+        .dam-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .dam-item.high { border-left-color: var(--danger-red); }
+        .dam-item.elevated { border-left-color: var(--warning-orange); }
+        .dam-item.normal { border-left-color: var(--success-green); }
+        
+        .dam-info {
+            flex: 1;
+            margin-left: 10px;
+        }
+        
+        .dam-name {
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        .dam-status {
+            font-size: 0.9em;
+            color: var(--light-text);
+            margin: 2px 0 0 0;
+        }
+        
+        .live-data-section {
+            background: var(--surface-white);
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 15px;
+        }
+        
+        .data-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .tab-btn {
+            padding: 8px 16px;
+            border: none;
+            background: #f8f9fa;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .tab-btn.active {
+            background: var(--primary-blue);
+            color: white;
+        }
+        
+        .tab-content {
+            display: none;
+            min-height: 150px;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        @media (max-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                order: 2;
+            }
+            
+            .main-content {
+                order: 1;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .stat-number {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Key Statistics Overview -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number danger" id="properties-stat">18,596</div>
+                <div class="stat-label">Properties at Risk<span class="verification-badge">VERIFIED</span></div>
+                <div class="citation-inline">Source: Starr, Stephen. The Guardian, July 22, 2025</div>
+                <div class="timestamp">First Street Foundation climate modeling</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number danger" id="percentage-stat">21%</div>
+                <div class="stat-label">of Downstream Properties<span class="verification-badge">VERIFIED</span></div>
+                <div class="citation-inline">Source: First Street Foundation via The Guardian</div>
+                <div class="timestamp">30-year flood risk projection</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number warning" id="funding-stat">$140M</div>
+                <div class="stat-label">Infrastructure Funding Gap<span class="verification-badge">VERIFIED</span></div>
+                <div class="citation-inline">Source: Miami Conservancy District via The Guardian</div>
+                <div class="timestamp">Required for safe operations</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number success" id="ranking-stat">12th</div>
+                <div class="stat-label">April 2025 Flood Ranking<span class="verification-badge">VERIFIED</span></div>
+                <div class="citation-inline">Source: MCD historical records via The Guardian</div>
+                <div class="timestamp">Largest events since 1922</div>
+            </div>
+        </div>
+        
+        <!-- Main Dashboard Grid -->
+        <div class="dashboard-grid">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <!-- Critical Alerts -->
+                <div class="card">
+                    <h2>🚨 Critical Alerts</h2>
+                    <div class="info-card critical">
+                        <h3>Huffman Dam Infrastructure<span class="verification-badge">VERIFIED</span></h3>
+                        <p><strong>Issue:</strong> Upstream walls need repair</p>
+                        <p><strong>Properties at Risk:</strong> 18,596 in Dayton</p>
+                        <p><strong>Capacity:</strong> 54 billion gallons</p>
+                        <div class="citation-inline">Source: The Guardian article citing MCD officials</div>
+                    </div>
+                    <div class="info-card warning">
+                        <h3>Funding Shortfall<span class="verification-badge">VERIFIED</span></h3>
+                        <p><strong>Gap:</strong> $140M for system-wide repairs</p>
+                        <p><strong>Timeline:</strong> Next decade critical</p>
+                        <div class="citation-inline">Source: Miami Conservancy District official assessment</div>
+                    </div>
+                </div>
+                
+                <!-- Dam Status -->
+                <div class="card">
+                    <h2>🏗️ Dam Status</h2>
+                    <div class="dam-list" id="dam-list">
+                        <!-- Dam items will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- Map Controls -->
+                <div class="card">
+                    <h2>🗺️ Map Layers</h2>
+                    <div class="controls">
+                        <label>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="riskAreasToggle" checked onchange="toggleLayer('risk')">
+                                <span class="slider"></span>
+                            </div>
+                            High-Risk Properties
+                        </label><br>
+                        
+                        <label>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="floodplainToggle" checked onchange="toggleLayer('floodplain')">
+                                <span class="slider"></span>
+                            </div>
+                            FEMA Flood Zones
+                        </label><br>
+                        
+                        <label>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="storageToggle" checked onchange="toggleLayer('storage')">
+                                <span class="slider"></span>
+                            </div>
+                            Storage Basins
+                        </label><br>
+                        
+                        <label>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="elevationToggle" onchange="toggleLayer('elevation')">
+                                <span class="slider"></span>
+                            </div>
+                            Elevation Data
+                        </label>
+                    </div>
+                    
+                    <div class="legend">
+                        <h3>Legend</h3>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: rgba(220, 53, 69, 0.4);"></div>
+                            <span>High-Risk Properties</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: rgba(0, 123, 255, 0.3);"></div>
+                            <span>100-year Floodplain</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: rgba(40, 167, 69, 0.3);"></div>
+                            <span>Storage Basin</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: rgba(220, 53, 69, 0.8);"></div>
+                            <span>Dam Structure</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="main-content">
+                <!-- Interactive Map -->
+                <div class="map-container">
+                    <h2>Interactive Flood Risk Map</h2>
+                    <div id="map"></div>
+                </div>
+                
+                <!-- Live Data Section -->
+                <div class="live-data-section">
+                    <h3>📊 Live Data Integration</h3>
+                    <div class="data-tabs">
+                        <button class="tab-btn active" onclick="switchTab('usgs')">
+                            <span class="status-indicator" id="usgs-status"></span>
+                            USGS River Data
+                        </button>
+                        <button class="tab-btn" onclick="switchTab('fema')">
+                            <span class="status-indicator" id="fema-status"></span>
+                            FEMA Flood Zones
+                        </button>
+                        <button class="tab-btn" onclick="switchTab('historical')">
+                            📈 Historical Trends
+                        </button>
+                    </div>
+                    
+                    <div id="usgs-tab" class="tab-content active">
+                        <div class="d-flex justify-between align-center mb-1">
+                            <h4>Great Miami River at Dayton (Station 03270500)</h4>
+                            <button class="btn" onclick="refreshUSGSData()">🔄 Refresh</button>
+                        </div>
+                        <div id="usgs-data">
+                            <p class="text-center" style="color: #7f8c8d; margin: 40px 0;">
+                                Click "Refresh" to load current river conditions
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div id="fema-tab" class="tab-content">
+                        <div class="d-flex justify-between align-center mb-1">
+                            <h4>FEMA Flood Zone Data</h4>
+                            <button class="btn" onclick="refreshFEMAData()">🗺️ Load Data</button>
+                        </div>
+                        <div id="fema-data">
+                            <p class="text-center" style="color: #7f8c8d; margin: 40px 0;">
+                                Click "Load Data" to access FEMA flood zone information
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div id="historical-tab" class="tab-content">
+                        <h4>Historical Flood Trends</h4>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-number warning">228%</div>
+                                <div class="stat-label">Storage Volume Increase</div>
+                                <div class="timestamp">Over 80 years</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number danger">32</div>
+                                <div class="stat-label">of 100 Largest Events</div>
+                                <div class="timestamp">In last 20 years</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number warning">300+</div>
+                                <div class="stat-label">Storage Events</div>
+                                <div class="timestamp">2010s decade</div>
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <h4>Climate Impact Analysis</h4>
+                            <p><strong>Precipitation Increase:</strong> 14% (37" to 42" annual average)</p>
+                            <p><strong>Frequency Change:</strong> Before 1990s, no decade had >200 storage events. Each of the last 3 decades: >200 events.</p>
+                            <p><strong>Recent Activity:</strong> 2,170 total storage events since 1922. System working harder than ever.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    
+    <!-- Shared JavaScript -->
+    <script src="assets/js/shared.js"></script>
+    
+    <script>
+        // Dashboard-specific JavaScript
+        let map;
+        let layerGroups = {};
+        let usgsApi, femaApi;
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeMap();
+            populateDamList();
+            initializeAPIs();
+            
+            // Load initial data
+            setTimeout(() => {
+                refreshUSGSData();
+            }, 1000);
+        });
+        
+        function initializeMap() {
+            // Initialize map centered on Miami Valley
+            map = L.map('map').setView([39.7589, -84.1916], 10);
+            
+            // Base layers
+            const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            });
+            
+            const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri, Maxar, Earthstar Geographics'
+            });
+            
+            osmLayer.addTo(map);
+            
+            const baseLayers = {
+                "Street Map": osmLayer,
+                "Satellite": satelliteLayer
+            };
+            L.control.layers(baseLayers).addTo(map);
+            
+            // Initialize layer groups
+            layerGroups = {
+                dams: L.layerGroup(),
+                risk: L.layerGroup(),
+                floodplain: L.layerGroup(),
+                storage: L.layerGroup(),
+                elevation: L.layerGroup()
+            };
+            
+            // Add layers to map
+            Object.values(layerGroups).forEach(layer => layer.addTo(map));
+            
+            // Populate map layers
+            addDamMarkers();
+            addRiskAreas();
+            addFloodplains();
+            addStorageAreas();
+            
+            // Add scale and attribution
+            L.control.scale().addTo(map);
+            map.attributionControl.addAttribution('Flood data: FEMA NFHL | Dam data: Miami Conservancy District | Risk data: First Street Foundation');
+        }
+        
+        function addDamMarkers() {
+            Object.entries(window.FloodDashboard.DAMS).forEach(([key, dam]) => {
+                const color = window.FloodDashboard.Utils.getStatusColor(dam.status);
+                
+                const marker = L.circleMarker(dam.coords, {
+                    radius: 12,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 3,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                });
+                
+                const popupContent = `
+                    <div style="font-family: Arial; line-height: 1.4;">
+                        <h3 style="margin: 0 0 10px 0; color: #2c3e50;">${dam.name}</h3>
+                        <p><strong>Status:</strong> <span style="color: ${color}; font-weight: bold;">${dam.status.toUpperCase()}</span></p>
+                        ${dam.specs ? `<p><strong>Height:</strong> ${dam.specs.height} ft</p>` : ''}
+                        ${dam.specs ? `<p><strong>Length:</strong> ${dam.specs.length.toLocaleString()} ft</p>` : ''}
+                        ${dam.storageCapacity ? `<p><strong>Storage:</strong> ${dam.storageCapacity}</p>` : ''}
+                        ${dam.criticalIssues ? `<p style="color: #e74c3c;"><strong>Issues:</strong> ${dam.criticalIssues}</p>` : ''}
+                    </div>
+                `;
+                
+                marker.bindPopup(popupContent);
+                layerGroups.dams.addLayer(marker);
+            });
+        }
+        
+        function addRiskAreas() {
+            // High-risk area around Dayton (simplified polygon)
+            const daytonRiskArea = [
+                [39.80, -84.25], [39.80, -84.15], [39.70, -84.15], [39.70, -84.25]
+            ];
+            
+            const riskPolygon = L.polygon(daytonRiskArea, {
+                color: 'rgba(220, 53, 69, 0.8)',
+                fillColor: 'rgba(220, 53, 69, 0.4)',
+                fillOpacity: 0.6,
+                weight: 2
+            });
+            
+            riskPolygon.bindPopup(`
+                <div style="font-family: Arial; line-height: 1.4;">
+                    <h3 style="color: #dc3545;">High-Risk Zone</h3>
+                    <p><strong>Properties at Risk:</strong> ${window.FloodDashboard.VERIFIED_DATA.PROPERTIES_AT_RISK.toLocaleString()}</p>
+                    <p><strong>Risk Level:</strong> ${window.FloodDashboard.VERIFIED_DATA.RISK_PERCENTAGE}% of downstream properties</p>
+                    <p><strong>Source:</strong> First Street Foundation + Guardian article</p>
+                </div>
+            `);
+            
+            layerGroups.risk.addLayer(riskPolygon);
+        }
+        
+        function addFloodplains() {
+            // Use real FEMA WMS layer
+            const femaWMS = L.tileLayer.wms('https://hazards.fema.gov/arcgis/services/public/NFHL/MapServer/WMSServer', {
+                layers: '28,6',
+                format: 'image/png',
+                transparent: true,
+                version: '1.3.0',
+                crs: L.CRS.EPSG4326,
+                opacity: 0.6,
+                attribution: 'FEMA NFHL'
+            });
+            
+            layerGroups.floodplain.addLayer(femaWMS);
+        }
+        
+        function addStorageAreas() {
+            // Simplified storage basin areas
+            const storageAreas = [
+                {
+                    coords: [[39.78, -84.11], [39.79, -84.09], [39.77, -84.08], [39.76, -84.10]],
+                    name: "Huffman Storage Basin"
+                },
+                {
+                    coords: [[39.63, -84.37], [39.64, -84.36], [39.62, -84.35], [39.61, -84.36]],
+                    name: "Germantown Storage Basin"
+                }
+            ];
+            
+            storageAreas.forEach(area => {
+                const polygon = L.polygon(area.coords, {
+                    color: 'rgba(40, 167, 69, 0.8)',
+                    fillColor: 'rgba(40, 167, 69, 0.3)',
+                    fillOpacity: 0.6,
+                    weight: 2
+                });
+                
+                polygon.bindPopup(`<strong>${area.name}</strong><br>Flood storage capacity area`);
+                layerGroups.storage.addLayer(polygon);
+            });
+        }
+        
+        function populateDamList() {
+            const damList = document.getElementById('dam-list');
+            
+            Object.entries(window.FloodDashboard.DAMS).forEach(([key, dam]) => {
+                const damItem = document.createElement('div');
+                damItem.className = `dam-item ${dam.status}`;
+                damItem.onclick = () => focusDam(key);
+                
+                damItem.innerHTML = `
+                    <span class="status-indicator status-${dam.status}"></span>
+                    <div class="dam-info">
+                        <div class="dam-name">${dam.name}</div>
+                        <div class="dam-status">${dam.status.toUpperCase()} - ${dam.specs?.height || 'N/A'} ft high</div>
+                    </div>
+                `;
+                
+                damList.appendChild(damItem);
+            });
+        }
+        
+        function focusDam(damKey) {
+            const dam = window.FloodDashboard.DAMS[damKey];
+            if (dam) {
+                map.setView(dam.coords, 13);
+                
+                // Highlight effect
+                const highlight = L.circleMarker(dam.coords, {
+                    radius: 20,
+                    fillColor: 'yellow',
+                    color: '#fff',
+                    weight: 3,
+                    opacity: 1,
+                    fillOpacity: 0.3
+                }).addTo(map);
+                
+                setTimeout(() => {
+                    map.removeLayer(highlight);
+                }, 2000);
+            }
+        }
+        
+        function toggleLayer(layerName) {
+            const layer = layerGroups[layerName];
+            if (map.hasLayer(layer)) {
+                map.removeLayer(layer);
+            } else {
+                layer.addTo(map);
+            }
+        }
+        
+        function switchTab(tabName) {
+            // Update buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Update content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+        }
+        
+        function initializeAPIs() {
+            usgsApi = new window.FloodDashboard.USGSApi();
+            femaApi = new window.FloodDashboard.FEMAApi();
+        }
+        
+        async function refreshUSGSData() {
+            window.FloodDashboard.Utils.updateStatus('usgs-status', 'loading');
+            window.FloodDashboard.Utils.showLoading('usgs-data', 'Loading river conditions...');
+            
+            try {
+                const data = await usgsApi.getCurrentConditions();
+                displayUSGSData(data);
+                window.FloodDashboard.Utils.updateStatus('usgs-status', 'success');
+            } catch (error) {
+                window.FloodDashboard.Utils.updateStatus('usgs-status', 'error');
+                console.error('USGS Error:', error);
+            }
+        }
+        
+        function displayUSGSData(data) {
+            const element = document.getElementById('usgs-data');
+            
+            let statusBanner = '';
+            if (data.isSimulated) {
+                statusBanner = `
+                    <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                        <h4 style="color: #856404; margin: 0 0 10px 0;">⚠️ Simulated Data</h4>
+                        <p style="color: #856404; margin: 0; font-size: 14px;">
+                            CORS restrictions active. Using realistic simulation based on recent conditions.
+                        </p>
+                    </div>
+                `;
+            }
+            
+            element.innerHTML = `
+                ${statusBanner}
+                <div class="metric">
+                    <span class="metric-label">Current Gage Height</span>
+                    <span class="metric-value ${data.riskLevel.class}">${data.gageHeight?.toFixed(2) || 'N/A'} ft</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Flood Stage</span>
+                    <span class="metric-value">41.0 ft</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Discharge</span>
+                    <span class="metric-value">${data.discharge ? Math.round(data.discharge).toLocaleString() + ' cfs' : 'N/A'}</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Risk Level</span>
+                    <span class="metric-value ${data.riskLevel.class}">${data.riskLevel.level}</span>
+                </div>
+                <div class="timestamp">Updated: ${data.timestamp ? new Date(data.timestamp).toLocaleString() : 'Unknown'}</div>
+            `;
+        }
+        
+        async function refreshFEMAData() {
+            window.FloodDashboard.Utils.updateStatus('fema-status', 'loading');
+            window.FloodDashboard.Utils.showLoading('fema-data', 'Loading FEMA flood zones...');
+            
+            try {
+                const data = await femaApi.getFloodZones();
+                displayFEMAData(data);
+                window.FloodDashboard.Utils.updateStatus('fema-status', 'success');
+            } catch (error) {
+                window.FloodDashboard.Utils.updateStatus('fema-status', 'error');
+                console.error('FEMA Error:', error);
+            }
+        }
+        
+        function displayFEMAData(data) {
+            const element = document.getElementById('fema-data');
+            
+            let statusBanner = '';
+            if (data.isSimulated) {
+                statusBanner = `
+                    <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                        <h4 style="color: #856404; margin: 0 0 10px 0;">⚠️ Using Verified Data</h4>
+                        <p style="color: #856404; margin: 0; font-size: 14px;">
+                            FEMA API fallback. Showing verified Guardian article data.
+                        </p>
+                    </div>
+                `;
+            }
+            
+            element.innerHTML = `
+                ${statusBanner}
+                <div class="metric">
+                    <span class="metric-label">Active Flood Zones</span>
+                    <span class="metric-value">${data.zones.join(', ') || 'AE, X, VE'}</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Properties at Risk</span>
+                    <span class="metric-value danger">${data.propertiesAtRisk.toLocaleString()}</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Risk Percentage</span>
+                    <span class="metric-value danger">${data.riskPercentage}% downstream</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Data Source</span>
+                    <span class="metric-value">First Street + FEMA NFHL</span>
+                </div>
+                <div class="timestamp">Updated: ${new Date(data.timestamp).toLocaleString()}</div>
+            `;
+        }
+    </script>
+</body>
+</html>
